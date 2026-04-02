@@ -1,0 +1,14 @@
+package com.shop.shop_java.common;
+
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(Exception.class)
+    public Result<?> handleException(Exception e) {
+        e.printStackTrace();
+        return Result.error(500, e.getMessage() != null ? e.getMessage() : "Server Internal Error");
+    }
+}
