@@ -1,35 +1,54 @@
 package com.shop.shop_java.controller.p0;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.shop.shop_java.entity.SysUser;
+import com.shop.shop_java.mapper.SysUserMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-import java.util.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/extend/user_list")
 public class UserController {
 
+    @Autowired
+    private SysUserMapper sysUserMapper;
+
     @GetMapping("/list")
     public Map<String, Object> getList(@RequestParam(defaultValue = "1") int page,
                                        @RequestParam(defaultValue = "10") int limit,
                                        @RequestParam(required = false) String keyword,
-                                       @RequestParam(required = false) Integer level) {
-        List<Map<String, Object>> list = new ArrayList<>();
-        String[] names = {"路飞", "索隆", "娜美", "乌索普", "山治", "乔巴", "罗宾"};
-        for(int i=0; i<10; i++) {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", i + 1);
-            map.put("avatar", "https://img.alicdn.com/tfs/TB1V2eOrKSSMeJjSZFsXXcXhpXa-130-130.png");
-            map.put("nickname", names[i % names.length] + i);
-            map.put("phone", "1380013800" + i);
-            map.put("level_name", i % 3 == 0 ? "VIP会员" : "普通用户");
-            map.put("balance", String.format("%.2f", Math.random() * 1000));
-            map.put("integral", (int)(Math.random() * 5000));
-            map.put("status", 1);
-            map.put("create_time", "2024-04-01 12:00:00");
-            list.add(map);
+                                       @RequestParam(required = false) String level) {
+        
+        Page<SysUser> pageParam = new Page<>(page, limit);
+        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
+        
+        if (keyword != null && !keyword.isEmpty()) {
+            queryWrapper.and(wrapper -> 
+                wrapper.like(SysUser::getNickname, keyword)
+                       .or()
+                       .like(SysUser::getPhone, keyword)
+            );
         }
+        
+        if (level != null && !level.isEmpty()) {
+            if ("0".equals(level)) {
+                queryWrapper.eq(SysUser::getLevelName, "普通用户");
+            } else if ("1".equals(level)) {
+                queryWrapper.eq(SysUser::getLevelName, "VIP会员");
+            }
+        }
+        
+        queryWrapper.orderByDesc(SysUser::getCreateTime);
+        
+        sysUserMapper.selectPage(pageParam, queryWrapper);
+
         Map<String, Object> data = new HashMap<>();
-        data.put("records", list);
-        data.put("total", 50);
+        data.put("records", pageParam.getRecords());
+        data.put("total", pageParam.getTotal());
         
         Map<String, Object> res = new HashMap<>();
         res.put("code", 200);
@@ -39,7 +58,8 @@ public class UserController {
     }
 
     @PostMapping("/add")
-    public Map<String, Object> add(@RequestBody Map<String, Object> params) {
+    public Map<String, Object> add(@RequestBody SysUser sysUser) {
+        sysUserMapper.insert(sysUser);
         Map<String, Object> res = new HashMap<>();
         res.put("code", 200);
         res.put("msg", "添加成功");
@@ -47,7 +67,8 @@ public class UserController {
     }
 
     @PutMapping("/update")
-    public Map<String, Object> update(@RequestBody Map<String, Object> params) {
+    public Map<String, Object> update(@RequestBody SysUser sysUser) {
+        sysUserMapper.updateById(sysUser);
         Map<String, Object> res = new HashMap<>();
         res.put("code", 200);
         res.put("msg", "修改成功");
@@ -56,6 +77,7 @@ public class UserController {
 
     @DeleteMapping("/delete")
     public Map<String, Object> delete(@RequestParam Integer id) {
+        sysUserMapper.deleteById(id);
         Map<String, Object> res = new HashMap<>();
         res.put("code", 200);
         res.put("msg", "删除成功");
