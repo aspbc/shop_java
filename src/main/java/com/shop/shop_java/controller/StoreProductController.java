@@ -53,25 +53,17 @@ public class StoreProductController {
     @GetMapping("/list")
     public Result<Page<StoreProduct>> list(@RequestParam(defaultValue = "1") Integer page,
                                            @RequestParam(defaultValue = "15") Integer limit,
-                                           @RequestParam(required = false) String keyword,
+                                           @RequestParam(required = false, name = "store_name") String storeName,
+                                           @RequestParam(required = false, name = "field_key") String fieldKey,
                                            @RequestParam(required = false) Integer type,
-                                           @RequestParam(required = false) Integer cateId,
-                                           @RequestParam(required = false) Integer productType,
-                                           @RequestParam(required = false) String priceMin,
-                                           @RequestParam(required = false) String priceMax,
-                                           @RequestParam(required = false) String salesMin,
-                                           @RequestParam(required = false) String salesMax) {
+                                           @RequestParam(required = false, name = "cate_id") Integer cateId,
+                                           @RequestParam(required = false, name = "product_type") Integer productType,
+                                           @RequestParam(required = false, name = "price_range") String priceRange,
+                                           @RequestParam(required = false, name = "sales_range") String salesRange,
+                                           @RequestParam(required = false, name = "stock_range") String stockRange,
+                                           @RequestParam(required = false, name = "supplier_id") Integer supplierId) {
         Page<StoreProduct> pageParam = new Page<>(page, limit);
-        LambdaQueryWrapper<StoreProduct> wrapper = new LambdaQueryWrapper<>();
-        
-        if (keyword != null && !keyword.isEmpty()) {
-            wrapper.and(q -> q.like(StoreProduct::getStoreName, keyword).or().like(StoreProduct::getKeyword, keyword).or().eq(StoreProduct::getId, keyword));
-        }
-        if (cateId != null) wrapper.eq(StoreProduct::getCateId, String.valueOf(cateId));
-        if (priceMin != null && !priceMin.isEmpty()) wrapper.ge(StoreProduct::getPrice, new java.math.BigDecimal(priceMin));
-        if (priceMax != null && !priceMax.isEmpty()) wrapper.le(StoreProduct::getPrice, new java.math.BigDecimal(priceMax));
-        if (salesMin != null && !salesMin.isEmpty()) wrapper.ge(StoreProduct::getSales, Integer.parseInt(salesMin));
-        if (salesMax != null && !salesMax.isEmpty()) wrapper.le(StoreProduct::getSales, Integer.parseInt(salesMax));
+        LambdaQueryWrapper<StoreProduct> wrapper = buildBaseQuery(storeName, fieldKey, cateId, productType, priceRange, salesRange, stockRange, supplierId);
         
         // 根据状态类型(type)动态追加底层数据库状态字段的过滤条件
         // 实现了与 PHP 原版 100% 相同的组合查询逻辑
@@ -120,17 +112,64 @@ public class StoreProductController {
      *
      * @return 包含各分类对应数量的 Map (如：selling: 10, warehouse: 5...)
      */
+    private LambdaQueryWrapper<StoreProduct> buildBaseQuery(String storeName, String fieldKey, Integer cateId, Integer productType, String priceRange, String salesRange, String stockRange, Integer supplierId) {
+        LambdaQueryWrapper<StoreProduct> w = new LambdaQueryWrapper<>();
+        
+        // 处理默认supplierId=0时的平台商品过滤
+        if (supplierId == null || supplierId == 0) {
+            // 注意：实体中暂无pid，先根据实际需要忽略或使用其他字段代替
+            // 若数据库有 pid，可在此补充：w.eq(StoreProduct::getPid, 0);
+        }
+
+        if (storeName != null && !storeName.isEmpty()) {
+            if ("store_name".equals(fieldKey)) {
+                w.like(StoreProduct::getStoreName, storeName);
+            } else if ("product_id".equals(fieldKey)) {
+                w.eq(StoreProduct::getId, storeName);
+            } else {
+                w.and(q -> q.like(StoreProduct::getStoreName, storeName).or().like(StoreProduct::getKeyword, storeName).or().eq(StoreProduct::getId, storeName));
+            }
+        }
+        
+        if (cateId != null) w.eq(StoreProduct::getCateId, String.valueOf(cateId));
+        // 注意：实体中暂无 productType 字段，如果数据库无此字段，可暂时忽略
+
+        // 处理 range，格式如 "10-100" 或 "10-" 或 "-100"
+        applyRange(w, StoreProduct::getPrice, priceRange, true);
+        applyRange(w, StoreProduct::getSales, salesRange, false);
+        applyRange(w, StoreProduct::getStock, stockRange, false);
+
+        return w;
+    }
+
+    private <T> void applyRange(LambdaQueryWrapper<StoreProduct> w, com.baomidou.mybatisplus.core.toolkit.support.SFunction<StoreProduct, ?> column, String rangeStr, boolean isDecimal) {
+        if (rangeStr != null && rangeStr.contains("-")) {
+            String[] parts = rangeStr.split("-", 2);
+            String minStr = parts[0];
+            String maxStr = parts.length > 1 ? parts[1] : "";
+            if (!minStr.isEmpty()) {
+                if (isDecimal) w.ge(column, new java.math.BigDecimal(minStr));
+                else w.ge(column, Integer.parseInt(minStr));
+            }
+            if (!maxStr.isEmpty()) {
+                if (isDecimal) w.le(column, new java.math.BigDecimal(maxStr));
+                else w.le(column, Integer.parseInt(maxStr));
+            }
+        }
+    }
+
     @GetMapping("/status_statistics")
-    public Result<Map<String, Object>> statusStatistics(@RequestParam(required = false) String keyword,
-                                                        @RequestParam(required = false) Integer cateId,
-                                                        @RequestParam(required = false) Integer productType,
-                                                        @RequestParam(required = false) String priceMin,
-                                                        @RequestParam(required = false) String priceMax,
-                                                        @RequestParam(required = false) String salesMin,
-                                                        @RequestParam(required = false) String salesMax) {
+    public Result<Map<String, Object>> statusStatistics(@RequestParam(required = false, name = "store_name") String storeName,
+                                                        @RequestParam(required = false, name = "field_key") String fieldKey,
+                                                        @RequestParam(required = false, name = "cate_id") Integer cateId,
+                                                        @RequestParam(required = false, name = "product_type") Integer productType,
+                                                        @RequestParam(required = false, name = "price_range") String priceRange,
+                                                        @RequestParam(required = false, name = "sales_range") String salesRange,
+                                                        @RequestParam(required = false, name = "stock_range") String stockRange,
+                                                        @RequestParam(required = false, name = "supplier_id") Integer supplierId) {
         
         // 缓存键：组合所有查询参数
-        String cacheKey = String.format("%s_%s_%s_%s_%s_%s_%s", keyword, cateId, productType, priceMin, priceMax, salesMin, salesMax);
+        String cacheKey = String.format("%s_%s_%s_%s_%s_%s_%s_%s", storeName, fieldKey, cateId, productType, priceRange, salesRange, stockRange, supplierId);
         CacheData cache = statsCache.get(cacheKey);
         
         // 1分钟内查询使用缓存
@@ -142,18 +181,7 @@ public class StoreProductController {
 
         // 提取公共过滤条件构造器 (公用搜索条件：关键词、分类、价格范围、销量范围等)
         // 这样在计算各个状态数量时，都会自动叠加这些搜索限制
-        java.util.function.Supplier<LambdaQueryWrapper<StoreProduct>> baseWrapper = () -> {
-            LambdaQueryWrapper<StoreProduct> w = new LambdaQueryWrapper<>();
-            if (keyword != null && !keyword.isEmpty()) {
-                w.and(q -> q.like(StoreProduct::getStoreName, keyword).or().like(StoreProduct::getKeyword, keyword).or().eq(StoreProduct::getId, keyword));
-            }
-            if (cateId != null) w.eq(StoreProduct::getCateId, String.valueOf(cateId));
-            if (priceMin != null && !priceMin.isEmpty()) w.ge(StoreProduct::getPrice, new java.math.BigDecimal(priceMin));
-            if (priceMax != null && !priceMax.isEmpty()) w.le(StoreProduct::getPrice, new java.math.BigDecimal(priceMax));
-            if (salesMin != null && !salesMin.isEmpty()) w.ge(StoreProduct::getSales, Integer.parseInt(salesMin));
-            if (salesMax != null && !salesMax.isEmpty()) w.le(StoreProduct::getSales, Integer.parseInt(salesMax));
-            return w;
-        };
+        java.util.function.Supplier<LambdaQueryWrapper<StoreProduct>> baseWrapper = () -> buildBaseQuery(storeName, fieldKey, cateId, productType, priceRange, salesRange, stockRange, supplierId);
         
         // 销售中: is_show = 1, is_del = 0, is_verify = 1
         stats.put("selling", storeProductService.count(baseWrapper.get().eq(StoreProduct::getIsDel, 0).eq(StoreProduct::getIsShow, 1).eq(StoreProduct::getIsVerify, 1)));
