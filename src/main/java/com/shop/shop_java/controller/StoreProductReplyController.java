@@ -24,11 +24,15 @@ public class StoreProductReplyController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer limit,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Integer isReply) {
+            @RequestParam(required = false) Integer isReply,
+            @RequestParam(required = false) Integer product_id) {
 
         LambdaQueryWrapper<StoreProductReply> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StoreProductReply::getIsDel, 0); // 只查未删除的
 
+        if (product_id != null) {
+            wrapper.eq(StoreProductReply::getProductId, product_id);
+        }
         if (isReply != null && isReply != -1) {
             wrapper.eq(StoreProductReply::getIsReply, isReply);
         }

@@ -106,6 +106,12 @@ public class StoreProductController {
         wrapper.orderByDesc(StoreProduct::getId);
         return Result.success(storeProductService.page(pageParam, wrapper));
     }
+
+    @GetMapping("/info/{id}")
+    public Result<StoreProduct> info(@PathVariable Integer id) {
+        StoreProduct product = storeProductService.getById(id);
+        return Result.success(product);
+    }
     
     /**
      * 提取公共过滤条件构造器 (公用搜索条件：关键词、分类、价格范围、销量范围等)
