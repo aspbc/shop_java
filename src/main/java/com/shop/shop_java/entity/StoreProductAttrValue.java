@@ -18,6 +18,7 @@ public class StoreProductAttrValue {
     private Integer productType;
     @TableField("suk")
     private String sku;
+    @TableField("`unique`")
     private String unique;
     private String image;
     private BigDecimal price;
