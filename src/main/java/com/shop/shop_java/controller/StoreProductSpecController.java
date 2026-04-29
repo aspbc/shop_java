@@ -39,8 +39,9 @@ public class StoreProductSpecController {
                                                     @PathVariable Integer type,
                                                     @RequestBody Map<String, Object> body) {
         List<Map<String, Object>> attrs = castList(body.get("attrs"));
+        List<Map<String, Object>> items = castList(body.get("items"));
         Integer productType = castInt(body.get("product_type"), 0);
-        Map<String, Object> info = buildAttrInfo(id, type, productType, attrs);
+        Map<String, Object> info = buildAttrInfo(id, type, productType, attrs, items);
         Map<String, Object> data = new HashMap<>();
         data.put("info", info);
         return Result.success(data);
@@ -88,7 +89,7 @@ public class StoreProductSpecController {
             item.put("detail", detail);
             attrs.add(item);
         }
-        Map<String, Object> info = buildAttrInfo(id, type, productType, attrs);
+        Map<String, Object> info = buildAttrInfo(id, type, productType, attrs, new ArrayList<>());
         Map<String, Object> data = new HashMap<>();
         data.put("info", info);
         return Result.success(data);
@@ -139,7 +140,7 @@ public class StoreProductSpecController {
             productAttrService.saveBatch(attrEntities);
         }
 
-        Map<String, Object> info = buildAttrInfo(productId, type, productType, items);
+        Map<String, Object> info = buildAttrInfo(productId, type, productType, items, value);
         productAttrResultService.remove(new LambdaQueryWrapper<StoreProductAttrResult>()
                 .eq(StoreProductAttrResult::getProductId, productId)
                 .eq(StoreProductAttrResult::getType, type));
@@ -230,7 +231,7 @@ public class StoreProductSpecController {
         return Result.success(true);
     }
 
-    private Map<String, Object> buildAttrInfo(Integer productId, Integer type, Integer productType, List<Map<String, Object>> attrs) {
+    private Map<String, Object> buildAttrInfo(Integer productId, Integer type, Integer productType, List<Map<String, Object>> attrs, List<Map<String, Object>> itemsValue) {
         List<Map<String, Object>> normalized = normalizeAttrs(attrs);
         List<List<String>> dims = new ArrayList<>();
         List<String> titles = new ArrayList<>();
@@ -252,6 +253,15 @@ public class StoreProductSpecController {
                     .eq(StoreProductAttrValue::getType, type));
             for (StoreProductAttrValue v : list) {
                 if (v.getSku() != null) existed.put(v.getSku(), v);
+            }
+        }
+        Map<String, Map<String, Object>> local = new HashMap<>();
+        if (itemsValue != null) {
+            for (Map<String, Object> row : itemsValue) {
+                String sku = optSku(row);
+                if (sku != null && !sku.isEmpty()) {
+                    local.put(sku, row);
+                }
             }
         }
 
@@ -288,23 +298,28 @@ public class StoreProductSpecController {
             row.put("detail", combo);
             row.put("sku", suk);
             StoreProductAttrValue old = existed.get(suk);
-            row.put("unique", old != null ? old.getUnique() : createAttrUnique(productId == null ? 0 : productId, suk));
-            row.put("pic", old != null ? optString(old.getImage()) : "");
-            row.put("price", old != null ? optBigDecimal(old.getPrice()) : BigDecimal.ZERO);
-            row.put("cost", old != null ? optBigDecimal(old.getCost()) : BigDecimal.ZERO);
-            row.put("ot_price", old != null ? optBigDecimal(old.getOtPrice()) : BigDecimal.ZERO);
-            row.put("stock", old != null ? (old.getStock() == null ? 0 : old.getStock()) : 0);
-            row.put("bar_code", old != null ? optString(old.getBarCode()) : "");
-            row.put("code", old != null ? optString(old.getCode()) : "");
-            row.put("weight", old != null ? optBigDecimal(old.getWeight()) : BigDecimal.ZERO);
-            row.put("volume", old != null ? optBigDecimal(old.getVolume()) : BigDecimal.ZERO);
-            row.put("brokerage", old != null ? optBigDecimal(old.getBrokerage()) : BigDecimal.ZERO);
-            row.put("brokerage_two", old != null ? optBigDecimal(old.getBrokerageTwo()) : BigDecimal.ZERO);
-            row.put("vip_price", old != null ? optBigDecimal(old.getVipPrice()) : BigDecimal.ZERO);
-            row.put("level_price", old != null ? optString(old.getLevelPrice()) : "");
-            row.put("is_default_select", old != null && old.getIsDefaultSelect() != null ? old.getIsDefaultSelect() : 0);
-            row.put("is_show", old != null && old.getIsShow() != null ? old.getIsShow() : 1);
-            row.put("sort", old != null && old.getSort() != null ? old.getSort() : 0);
+            Map<String, Object> localRow = local.get(suk);
+            String unique = localRow != null ? castString(localRow.get("unique")) : null;
+            if (unique == null || unique.isEmpty()) {
+                unique = old != null ? old.getUnique() : null;
+            }
+            row.put("unique", unique != null && !unique.isEmpty() ? unique : createAttrUnique(productId == null ? 0 : productId, suk));
+            row.put("pic", localRow != null ? castString(localRow.getOrDefault("pic", localRow.get("image"))) : (old != null ? optString(old.getImage()) : ""));
+            row.put("price", localRow != null ? castBigDecimal(localRow.get("price")) : (old != null ? optBigDecimal(old.getPrice()) : BigDecimal.ZERO));
+            row.put("cost", localRow != null ? castBigDecimal(localRow.get("cost")) : (old != null ? optBigDecimal(old.getCost()) : BigDecimal.ZERO));
+            row.put("ot_price", localRow != null ? castBigDecimal(localRow.getOrDefault("ot_price", localRow.get("otPrice"))) : (old != null ? optBigDecimal(old.getOtPrice()) : BigDecimal.ZERO));
+            row.put("stock", localRow != null ? castInt(localRow.get("stock"), 0) : (old != null ? (old.getStock() == null ? 0 : old.getStock()) : 0));
+            row.put("bar_code", localRow != null ? castString(localRow.getOrDefault("bar_code", localRow.get("barCode"))) : (old != null ? optString(old.getBarCode()) : ""));
+            row.put("code", localRow != null ? castString(localRow.get("code")) : (old != null ? optString(old.getCode()) : ""));
+            row.put("weight", localRow != null ? castBigDecimal(localRow.get("weight")) : (old != null ? optBigDecimal(old.getWeight()) : BigDecimal.ZERO));
+            row.put("volume", localRow != null ? castBigDecimal(localRow.get("volume")) : (old != null ? optBigDecimal(old.getVolume()) : BigDecimal.ZERO));
+            row.put("brokerage", localRow != null ? castBigDecimal(localRow.get("brokerage")) : (old != null ? optBigDecimal(old.getBrokerage()) : BigDecimal.ZERO));
+            row.put("brokerage_two", localRow != null ? castBigDecimal(localRow.getOrDefault("brokerage_two", localRow.get("brokerageTwo"))) : (old != null ? optBigDecimal(old.getBrokerageTwo()) : BigDecimal.ZERO));
+            row.put("vip_price", localRow != null ? castBigDecimal(localRow.getOrDefault("vip_price", localRow.get("vipPrice"))) : (old != null ? optBigDecimal(old.getVipPrice()) : BigDecimal.ZERO));
+            row.put("level_price", localRow != null ? castString(localRow.getOrDefault("level_price", localRow.get("levelPrice"))) : (old != null ? optString(old.getLevelPrice()) : ""));
+            row.put("is_default_select", localRow != null ? castInt(localRow.getOrDefault("is_default_select", localRow.get("isDefaultSelect")), 0) : (old != null && old.getIsDefaultSelect() != null ? old.getIsDefaultSelect() : 0));
+            row.put("is_show", localRow != null ? castInt(localRow.getOrDefault("is_show", localRow.get("isShow")), 1) : (old != null && old.getIsShow() != null ? old.getIsShow() : 1));
+            row.put("sort", localRow != null ? castInt(localRow.getOrDefault("sort", 0), 0) : (old != null && old.getSort() != null ? old.getSort() : 0));
             value.add(row);
         }
 
