@@ -18,12 +18,18 @@ public class StoreProduct {
     private Integer relationId; // 关联门店/供应商ID
     private Integer merId; // 商户ID(平台默认0)
     private String storeName; // 商品名称
+    private String storeInfo; // 商品简介
     private String keyword; // 商品关键字
     private String image; // 商品主图
     private BigDecimal price; // 商品售价
+    private BigDecimal otPrice; // 商品市场价
+    private BigDecimal cost; // 成本价
     private Integer sales; // 销量
+    private Integer ficti; // 虚拟销量
     private Integer stock; // 库存
     private Integer sort; // 排序权重(越大越靠前)
+    private Integer specType; // 规格类型：0=单规格，1=多规格
+    private Integer collect; // 收藏数
     private Integer isShow; // 是否上架：0=下架(仓库中)，1=上架(销售中)
     private Integer isDel; // 是否删除：0=正常，1=已删除(放入回收站)
     private Integer isVerify; // 审核状态：1=审核通过，0=待审核，-1=审核未通过，-2=强制下架
